@@ -1,6 +1,6 @@
 
 ## Getting Started
-
+npm install
 First, run the development server:
 
 ```bash
