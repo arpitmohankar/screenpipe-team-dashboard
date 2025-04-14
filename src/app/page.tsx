@@ -1,103 +1,153 @@
-import Image from "next/image";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+'use client'
+
+import { useState, useEffect } from 'react';
+import ControlPanel from '@/components/ControlPanel';
+import UserStats from '@/components/UserStats';
+import TeamStats from '@/components/TeamStats';
+
+// Debug global API
+console.log('Window object:', typeof window !== 'undefined' ? 'available' : 'undefined');
+if (typeof window !== 'undefined') {
+  console.log('Electron object:', window.electron ? 'available' : 'missing');
+  if (window.electron) {
+    console.log('Screenpipe object:', window.electron.screenpipe ? 'available' : 'missing');
+  }
+}
 
 export default function Home() {
+  const [status, setStatus] = useState('Ready');
+  const [loading, setLoading] = useState(false);
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [apiAvailable, setApiAvailable] = useState(false);
+  
+  // Check if the API is available
+  useEffect(() => {
+    const checkApiAvailability = () => {
+      const electronAvailable = typeof window !== 'undefined' && 
+                              window.electron !== undefined;
+      const screenpipeAvailable = electronAvailable && 
+                                window.electron.screenpipe !== undefined;
+      
+      setApiAvailable(screenpipeAvailable);
+      
+      if (!screenpipeAvailable) {
+        console.warn(
+          'API not available:',
+          electronAvailable ? 'electron exists but screenpipe missing' : 'electron missing'
+        );
+        
+        // If in development, use mock data for UI testing
+        if (process.env.NODE_ENV === 'development') {
+          setStatus('Using development mock data (API not available)');
+        }
+      } else {
+        console.log('API is fully available');
+      }
+    };
+    
+    // Check immediately
+    checkApiAvailability();
+    
+    // Also check after a delay to allow possible late initialization
+    const timer = setTimeout(checkApiAvailability, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Wrapper function for API calls
+  const safeApiCall = async (
+    apiFunction: () => Promise<any>,
+    actionName: string
+  ) => {
+    if (!apiAvailable) {
+      console.error(`Cannot call ${actionName}: API not available`);
+      setStatus(`Error: Electron API not available for ${actionName}`);
+      return null;
+    }
+    
+    try {
+      return await apiFunction();
+    } catch (error) {
+      console.error(`Error in ${actionName}:`, error);
+      return null;
+    }
+  };
+  
+  const handleInstall = async () => {
+    setLoading(true);
+    setStatus('Installing Screenpipe CLI...');
+    
+    try {
+      // Only proceed if API is available
+      if (!apiAvailable) {
+        throw new Error('Electron API not available');
+      }
+      
+      const result = await window.electron.screenpipe.installCli();
+      setStatus(`Installation complete: ${result}`);
+    } catch (error) {
+      console.error('Installation error:', error);
+      setStatus(`Installation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Similar changes for handleStart and handleAnalyze
+  
+  // For development testing when API isn't available
+  const handleMockAnalyze = () => {
+    setLoading(true);
+    setStatus('Analyzing with mock data...');
+    
+    // Simulate async operation
+    setTimeout(() => {
+      setAnalysisData({
+        personalData: {
+          appUsage: { 'VS Code': 3600000, 'Chrome': 2400000, 'Slack': 1800000 },
+          taskSwitches: 25,
+          totalTime: 7800000
+        },
+        teamData: {
+          members: {
+            'You': { appUsage: { 'VS Code': 3600000, 'Chrome': 2400000, 'Slack': 1800000 }, taskSwitches: 25 },
+            'Alex': { appUsage: { 'VS Code': 2800000, 'Chrome': 3100000, 'Slack': 1500000 }, taskSwitches: 18 },
+            'Taylor': { appUsage: { 'VS Code': 4200000, 'Chrome': 1800000, 'Slack': 2200000 }, taskSwitches: 30 }
+          },
+          totalTime: 23000000,
+          avgTaskSwitches: 24
+        }
+      });
+      setStatus('Analysis complete (mock data)');
+      setLoading(false);
+    }, 1000);
+  };
+  
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <main className="flex min-h-screen flex-col p-8">
+      <h1 className="text-4xl font-bold mb-8">Team Screen Activity Dashboard</h1>
+      
+      {!apiAvailable && (
+        <div className="p-4 mb-4 bg-yellow-100 text-yellow-800 border-l-4 border-yellow-500">
+          Warning: Electron API not available. Running in development/browser mode with limited functionality.
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      )}
+      
+      <ControlPanel
+        onInstall={handleInstall}
+        onStart={apiAvailable ? handleStart : () => handleMockAnalyze()}
+        onAnalyze={apiAvailable ? handleAnalyze : handleMockAnalyze}
+        status={status}
+        loading={loading}
+        disabled={loading}
+      />
+      
+      {analysisData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+          <UserStats data={analysisData.personalData} />
+          <TeamStats data={analysisData.teamData} />
+        </div>
+      )}
+    </main>
   );
 }
